@@ -1,0 +1,95 @@
+# Cluster name shown in the dashboard.
+clusterName: ""
+# gateway host:port the agent dials (outbound only).
+backendAddr: "localhost:8443"
+# Optional PEM CA bundle to trust for the gateway before enrollment.
+backendCA: ""
+
+# Single-use enrollment token from the dashboard. Either set the token here
+# or reference an existing Secret with key "token". After the first successful
+# enrollment the identity lives in its own Secret and the token is not needed.
+enrollmentToken: ""
+enrollmentTokenSecret: ""
+
+# The agent is a closed-source binary delivered as an image from our registry. If the registry is
+# private, create a pull secret and list it here.
+imagePullSecrets: []   # - name: kubewatcher-registry
+
+image:
+  repository: docker.io/aaraz/kubewatcher-cluster-agent   # Docker Hub
+  tag: ""        # defaults to the chart appVersion
+  pullPolicy: Always
+
+replicas: 1
+logLevel: info
+heartbeatInterval: 15s
+
+# Observation (read-only watches). Debounce windows; empty uses the agent default.
+observe: true
+signalBuffer: 1000
+debounce:
+  crashLoop: ""        # default 90s (or 3 restarts)
+  imagePull: ""        # default 30s
+  unschedulable: ""    # default 3m
+  replicaFailure: ""   # default 60s
+  workload: ""         # StatefulSet/DaemonSet, default 3m
+  reemit: ""           # re-send a persisting failure, default 5m
+
+# How this agent is installed. Only you set this, here, and the agent reads it once at startup.
+#   read-only  (default) observes and collects evidence. It cannot change anything: the chart installs no
+#              write permissions, and the agent refuses every change with REJECTED_READ_ONLY_MODE.
+#   remediate  may run approved, typed changes within the permissions granted below.
+# The backend cannot change this. To switch: helm upgrade kubewatcher-agent <chart> --reuse-values --set mode=remediate
+# What the agent watches, and in which namespaces a change may land, is not set here: owners and admins
+# choose it in the dashboard (the watch scope).
+mode: read-only
+
+# Used only when mode=remediate. Adds a separate remediation role generated from the action handlers,
+# limited to the actions switched on here.
+remediation:
+  # Each action can be switched off on its own.
+  actions:
+    deployment.restart: true
+    deployment.scale: true
+    workload.set_resources: true
+    workload.restore_snapshot: true
+  # Optional hard limit: a Role per namespace instead of a ClusterRole, so Kubernetes itself holds the
+  # boundary. Empty (the default) = cluster-wide ClusterRole; the dashboard's watch scope then decides
+  # where changes may go.
+  namespaces: []
+  # Local safety net, enforced by the agent whatever the backend sends.
+  maxConcurrentTasks: 2
+  cooldown: 5m          # minimum gap between changes to the same target
+  bounds:
+    scaleMinReplicas: 1
+    scaleMaxReplicas: 20
+    maxMemory: 8Gi
+    minMemory: 16Mi
+    maxCPU: "8"
+    minCPU: 5m
+
+resources:
+  requests: { cpu: 25m, memory: 64Mi }
+  limits: { cpu: 250m, memory: 256Mi }
+
+nodeSelector: {}
+tolerations: []
+
+# Production settings.
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+podAnnotations: {}
+podLabels: {}
+
+# The agent is a single replica. This lets node drains proceed while still
+# protecting against evicting every replica if you scale it up.
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+# Optional egress lockdown: the agent only needs the Kubernetes API (kept open by
+# default) and the backend gateway.
+networkPolicy:
+  enabled: false
+  # CIDRs or IPs of the gateway and the Kubernetes API server.
+  egressCIDRs: []

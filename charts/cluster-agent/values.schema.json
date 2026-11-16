@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["read-only", "remediate"],
+      "description": "read-only (default) cannot change anything; remediate may run approved, typed changes."
+    },
+    "remediation": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "object",
+          "properties": {
+            "deployment.restart": { "type": "boolean" },
+            "deployment.scale": { "type": "boolean" },
+            "workload.set_resources": { "type": "boolean" },
+            "workload.restore_snapshot": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "namespaces": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

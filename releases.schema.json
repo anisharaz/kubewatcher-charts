@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/anisharaz/kubewatcher-charts/releases.schema.json",
+  "title": "KubeWatcher agent releases",
+  "description": "The list of agent chart releases that KubeWatcher reads. At most 200 releases and 256 KiB. Versions must also be unique (check-releases.sh checks it).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "releases"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "releases": {
+      "type": "array",
+      "maxItems": 200,
+      "items": { "$ref": "#/$defs/release" }
+    }
+  },
+  "$defs": {
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "released_at", "severity", "rbac_changed", "summary", "notes_url"],
+      "properties": {
+        "version": {
+          "description": "Strict semver, no leading v, no build or pre-release part.",
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "released_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "severity": { "enum": ["normal", "security"] },
+        "rbac_changed": {
+          "description": "The chart asks for different Kubernetes permissions than the previous release.",
+          "type": "boolean"
+        },
+        "summary": {
+          "description": "One sentence, plain text.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "notes_url": { "$ref": "#/$defs/github_url" },
+        "compare_url": {
+          "description": "Absent for the first release.",
+          "$ref": "#/$defs/github_url"
+        }
+      }
+    },
+    "github_url": {
+      "type": "string",
+      "pattern": "^https://github\\.com/[^/ ]+/[^/ ]+/[^ ]+$"
+    }
+  }
+}

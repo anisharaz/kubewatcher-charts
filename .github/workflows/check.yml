@@ -1,0 +1,31 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the chart
+        run: helm lint charts/cluster-agent
+      - name: Render the chart with the required values
+        run: |
+          helm template kubewatcher-agent charts/cluster-agent \
+            --namespace kubewatcher-system \
+            --set clusterName=ci --set backendAddr=gateway.example.com:443 --set enrollmentToken=ci-token > /dev/null
+      - name: Check releases.json
+        run: |
+          python3 -m json.tool releases.json > /dev/null
+          ./check-releases.sh releases.json
+      - name: Validate releases.json against the schema
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet jsonschema==4.23.0
+          .venv/bin/python -c 'import json, jsonschema; jsonschema.validate(json.load(open("releases.json")), json.load(open("releases.schema.json")))'

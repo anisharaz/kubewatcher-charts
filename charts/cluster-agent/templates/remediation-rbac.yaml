@@ -1,0 +1,59 @@
+{{- if eq .Values.mode "remediate" }}
+{{- /* Permissions are granted per action, so an action switched off gets none. */ -}}
+{{- $byAction := .Files.Get "files/remediation-rules.yaml" | fromYaml }}
+{{- $list := list }}
+{{- range $name, $on := .Values.remediation.actions }}{{ if $on }}{{ $list = concat $list (index $byAction $name) }}{{ end }}{{ end }}
+{{- $list = uniq $list }}
+{{- $rules := ternary "[]" (toYaml $list) (empty $list) }}
+{{- if .Values.remediation.namespaces }}
+{{- range .Values.remediation.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "agent.name" $ }}-remediation
+  namespace: {{ . }}
+  labels: {{- include "agent.labels" $ | nindent 4 }}
+rules:
+{{ $rules | indent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "agent.name" $ }}-remediation
+  namespace: {{ . }}
+  labels: {{- include "agent.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "agent.name" $ }}-remediation
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agent.name" $ }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- else }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "agent.name" . }}-remediation
+  labels: {{- include "agent.labels" . | nindent 4 }}
+rules:
+{{ $rules | indent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "agent.name" . }}-remediation
+  labels: {{- include "agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "agent.name" . }}-remediation
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agent.name" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

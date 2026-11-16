@@ -1,0 +1,7 @@
+apiVersion: v2
+appVersion: 0.1.1
+description: KubeWatcher cluster agent that watches a cluster read-only and streams
+  signals to the backend
+name: cluster-agent
+type: application
+version: 0.1.1

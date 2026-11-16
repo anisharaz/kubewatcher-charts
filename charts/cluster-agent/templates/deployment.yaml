@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agent.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "agent.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cluster-agent
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "agent.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}{{ toYaml . | nindent 8 }}{{- end }}
+      annotations:
+        {{- /* A changed token or CA does not change the pod template by itself, so the pods would keep the old one. These make them restart. A token kept in your own Secret (enrollmentTokenSecret) is not read: change the Secret's name, or restart the Deployment. */}}
+        {{- if and .Values.enrollmentToken (not .Values.enrollmentTokenSecret) }}
+        kubewatcher.com/enrollment-token-checksum: {{ .Values.enrollmentToken | sha256sum | quote }}
+        {{- end }}
+        {{- if .Values.backendCA }}
+        kubewatcher.com/backend-ca-checksum: {{ .Values.backendCA | sha256sum | quote }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      serviceAccountName: {{ include "agent.name" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          env:
+            - { name: CLUSTER_NAME, value: {{ .Values.clusterName | quote }} }
+            - { name: BACKEND_ADDR, value: {{ .Values.backendAddr | quote }} }
+            - { name: LOG_LEVEL, value: {{ .Values.logLevel | quote }} }
+            - { name: HEARTBEAT_INTERVAL, value: {{ .Values.heartbeatInterval | quote }} }
+            - { name: IDENTITY_SECRET, value: {{ include "agent.identitySecret" . | quote }} }
+            - { name: OBSERVE, value: {{ .Values.observe | quote }} }
+            - { name: SIGNAL_BUFFER, value: {{ .Values.signalBuffer | quote }} }
+            {{- with .Values.debounce.crashLoop }}
+            - { name: DEBOUNCE_CRASHLOOP, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.debounce.imagePull }}
+            - { name: DEBOUNCE_IMAGEPULL, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.debounce.unschedulable }}
+            - { name: DEBOUNCE_UNSCHEDULABLE, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.debounce.replicaFailure }}
+            - { name: DEBOUNCE_REPLICAFAILURE, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.debounce.workload }}
+            - { name: DEBOUNCE_WORKLOAD, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.debounce.reemit }}
+            - { name: REEMIT_INTERVAL, value: {{ . | quote }} }
+            {{- end }}
+            - { name: MODE, value: {{ .Values.mode | quote }} }
+            {{- if eq .Values.mode "remediate" }}
+            {{- $enabled := list }}
+            {{- range $name, $on := .Values.remediation.actions }}{{ if $on }}{{ $enabled = append $enabled $name }}{{ end }}{{ end }}
+            - { name: ENABLED_ACTIONS, value: {{ join "," (sortAlpha $enabled) | quote }} }
+            - { name: REMEDIATION_NAMESPACES, value: {{ join "," .Values.remediation.namespaces | quote }} }
+            - { name: MAX_CONCURRENT_TASKS, value: {{ .Values.remediation.maxConcurrentTasks | quote }} }
+            - { name: TASK_COOLDOWN, value: {{ .Values.remediation.cooldown | quote }} }
+            - { name: SCALE_MIN_REPLICAS, value: {{ .Values.remediation.bounds.scaleMinReplicas | quote }} }
+            - { name: SCALE_MAX_REPLICAS, value: {{ .Values.remediation.bounds.scaleMaxReplicas | quote }} }
+            - { name: RESOURCES_MAX_MEMORY, value: {{ .Values.remediation.bounds.maxMemory | quote }} }
+            - { name: RESOURCES_MIN_MEMORY, value: {{ .Values.remediation.bounds.minMemory | quote }} }
+            - { name: RESOURCES_MAX_CPU, value: {{ .Values.remediation.bounds.maxCPU | quote }} }
+            - { name: RESOURCES_MIN_CPU, value: {{ .Values.remediation.bounds.minCPU | quote }} }
+            {{- end }}
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            {{- if or .Values.enrollmentToken .Values.enrollmentTokenSecret }}
+            - name: ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.enrollmentTokenSecret | default (printf "%s-enrollment" (include "agent.name" .)) }}
+                  key: token
+            {{- end }}
+            {{- if .Values.backendCA }}
+            - { name: BACKEND_CA_FILE, value: /etc/kubewatcher/ca/ca.crt }
+            {{- end }}
+          {{- if .Values.backendCA }}
+          volumeMounts:
+            - { name: backend-ca, mountPath: /etc/kubewatcher/ca, readOnly: true }
+          {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.backendCA }}
+      volumes:
+        - name: backend-ca
+          configMap: { name: {{ include "agent.name" . }}-backend-ca }
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}

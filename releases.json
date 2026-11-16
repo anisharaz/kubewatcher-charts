@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "releases": [
+    {
+      "version": "0.1.1",
+      "released_at": "2026-11-15T04:35:10Z",
+      "severity": "normal",
+      "rbac_changed": false,
+      "summary": "First public release of the agent chart.",
+      "notes_url": "https://github.com/anisharaz/kubewatcher-charts/releases/tag/v0.1.1"
+    }
+  ]
+}
