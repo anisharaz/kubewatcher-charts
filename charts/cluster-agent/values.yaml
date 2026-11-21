@@ -29,7 +29,7 @@ observe: true
 signalBuffer: 1000
 debounce:
   crashLoop: ""        # default 90s (or 3 restarts)
-  imagePull: ""        # default 30s
+  imagePull: ""        # default 2m
   unschedulable: ""    # default 3m
   replicaFailure: ""   # default 60s
   workload: ""         # StatefulSet/DaemonSet, default 3m
@@ -39,7 +39,7 @@ debounce:
 #   read-only  (default) observes and collects evidence. It cannot change anything: the chart installs no
 #              write permissions, and the agent refuses every change with REJECTED_READ_ONLY_MODE.
 #   remediate  may run approved, typed changes within the permissions granted below.
-# The backend cannot change this. To switch: helm upgrade kubewatcher-agent <chart> --reuse-values --set mode=remediate
+# The backend cannot change this. To switch: helm upgrade kubewatcher-agent <chart> --reset-then-reuse-values --set mode=remediate
 # What the agent watches, and in which namespaces a change may land, is not set here: owners and admins
 # choose it in the dashboard (the watch scope).
 mode: read-only
@@ -69,8 +69,21 @@ remediation:
     minCPU: 5m
 
 resources:
-  requests: { cpu: 25m, memory: 64Mi }
-  limits: { cpu: 250m, memory: 256Mi }
+  requests: { cpu: 25m, memory: 128Mi }
+  limits: { cpu: 250m, memory: 512Mi }
+# Soft memory limit for the Go runtime (GOMEMLIMIT): the garbage collector works harder as the heap nears it,
+# before the kernel kills the agent at the limit above. About 80% of the memory limit; empty leaves it unset.
+goMemLimit: 400MiB
+
+# Health. The kubelet runs `cluster-agent healthcheck` (an exec probe that reads status files the agent keeps in
+# statusDir, an emptyDir); the agent opens no port. Readiness: the informer caches have synced. Liveness: the
+# agent's main loop made progress in the last 5 minutes. A backend that cannot be reached is not a failure: the
+# agent keeps retrying, and restarting it would only lose its signal buffer.
+statusDir: /var/run/kubewatcher
+probes:
+  enabled: true
+  liveness: { initialDelaySeconds: 30, periodSeconds: 30, timeoutSeconds: 5, failureThreshold: 3 }
+  readiness: { initialDelaySeconds: 5, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
 
 nodeSelector: {}
 tolerations: []

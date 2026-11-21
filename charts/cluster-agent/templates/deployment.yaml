@@ -54,6 +54,10 @@ spec:
             - { name: IDENTITY_SECRET, value: {{ include "agent.identitySecret" . | quote }} }
             - { name: OBSERVE, value: {{ .Values.observe | quote }} }
             - { name: SIGNAL_BUFFER, value: {{ .Values.signalBuffer | quote }} }
+            - { name: HEALTH_DIR, value: {{ .Values.statusDir | quote }} }
+            {{- with .Values.goMemLimit }}
+            - { name: GOMEMLIMIT, value: {{ . | quote }} }
+            {{- end }}
             {{- with .Values.debounce.crashLoop }}
             - { name: DEBOUNCE_CRASHLOOP, value: {{ . | quote }} }
             {{- end }}
@@ -99,16 +103,32 @@ spec:
             {{- if .Values.backendCA }}
             - { name: BACKEND_CA_FILE, value: /etc/kubewatcher/ca/ca.crt }
             {{- end }}
-          {{- if .Values.backendCA }}
-          volumeMounts:
-            - { name: backend-ca, mountPath: /etc/kubewatcher/ca, readOnly: true }
+          {{- if .Values.probes.enabled }}
+          {{- /* Exec probes that read the agent's status files: the agent opens no port. Liveness is not tied to the backend being reachable. */}}
+          livenessProbe:
+            exec: { command: [/cluster-agent, healthcheck, --live] }
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            exec: { command: [/cluster-agent, healthcheck, --ready] }
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
           {{- end }}
+          volumeMounts:
+            - { name: status, mountPath: {{ .Values.statusDir }} }
+            - { name: tmp, mountPath: /tmp }
+            {{- if .Values.backendCA }}
+            - { name: backend-ca, mountPath: /etc/kubewatcher/ca, readOnly: true }
+            {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
-      {{- if .Values.backendCA }}
       volumes:
+        # The root filesystem is read-only; these are the only places the agent writes.
+        - name: status
+          emptyDir: { sizeLimit: 1Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 16Mi }
+        {{- if .Values.backendCA }}
         - name: backend-ca
           configMap: { name: {{ include "agent.name" . }}-backend-ca }
-      {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
       {{- end }}

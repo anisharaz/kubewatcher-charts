@@ -2,6 +2,15 @@
   "schema_version": 1,
   "releases": [
     {
+      "version": "0.2.0",
+      "released_at": "2026-11-21T09:29:56Z",
+      "severity": "normal",
+      "rbac_changed": false,
+      "summary": "Groups incidents by what changed: reports a pod template fingerprint and detects hand-made workload changes. Bounded signal buffer, health probes, lower memory use.",
+      "notes_url": "https://github.com/anisharaz/kubewatcher-charts/releases/tag/v0.2.0",
+      "compare_url": "https://github.com/anisharaz/kubewatcher-charts/compare/v0.1.1...v0.2.0"
+    },
+    {
       "version": "0.1.1",
       "released_at": "2026-11-15T04:35:10Z",
       "severity": "normal",
